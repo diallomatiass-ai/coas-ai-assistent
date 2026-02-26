@@ -259,10 +259,40 @@ export const api = {
   deleteCalendarEvent: (id: string) =>
     fetchApi(`/calendar/events/${id}`, { method: 'DELETE' }),
 
-  // Accounts
+  // Accounts (email)
   listAccounts: () => fetchApi('/webhooks/accounts'),
   connectGmail: () => fetchApi('/webhooks/gmail/connect'),
   connectOutlook: () => fetchApi('/webhooks/outlook/connect'),
   disconnectAccount: (id: string) =>
     fetchApi(`/webhooks/accounts/${id}`, { method: 'DELETE' }),
+
+  // Calendar accounts (OAuth)
+  connectGoogleCalendar: () => fetchApi('/calendar/oauth/google/connect'),
+  connectOutlookCalendar: () => fetchApi('/calendar/oauth/microsoft/connect'),
+  listCalendarAccounts: () => fetchApi('/calendar/oauth/accounts'),
+  deleteCalendarAccount: (id: string) =>
+    fetchApi(`/calendar/oauth/accounts/${id}`, { method: 'DELETE' }),
+
+  // Booking rules
+  getBookingRules: () => fetchApi('/booking-rules'),
+  updateBookingRules: (data: {
+    enabled?: boolean;
+    work_days?: number[];
+    work_hours?: { start: string; end: string };
+    slot_duration_minutes?: number;
+    buffer_minutes?: number;
+    max_bookings_per_day?: number;
+    advance_booking_days?: number;
+    min_notice_hours?: number;
+    blocked_dates?: string[];
+    custom_slots?: Record<string, unknown>;
+  }) => fetchApi('/booking-rules', { method: 'PUT', body: JSON.stringify(data) }),
+  addBlockedDate: (date: string) =>
+    fetchApi('/booking-rules/blocked-dates', { method: 'POST', body: JSON.stringify({ date }) }),
+  removeBlockedDate: (date: string) =>
+    fetchApi(`/booking-rules/blocked-dates/${date}`, { method: 'DELETE' }),
+  getBookingAvailability: (from: string, to: string) => {
+    const params = new URLSearchParams({ from, to })
+    return fetchApi(`/booking-rules/availability?${params}`)
+  },
 };

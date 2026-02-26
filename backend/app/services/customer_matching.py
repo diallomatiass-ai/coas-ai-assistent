@@ -5,6 +5,7 @@ eller oprette nye kunder ved første kontakt.
 """
 
 import logging
+import re
 import uuid
 
 from sqlalchemy import select, or_
@@ -16,6 +17,15 @@ from app.models.secretary_call import SecretaryCall
 from app.models.action_item import ActionItem
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_phone(phone: str) -> str:
+    """Normalisér telefonnummer til rent ciffer-format for sammenligning."""
+    digits = re.sub(r'\D', '', phone)
+    # Fjern dansk landekode 45 hvis nummeret starter med det og er langt nok
+    if digits.startswith('45') and len(digits) > 8:
+        digits = digits[2:]
+    return digits
 
 
 async def find_or_create_from_call(
