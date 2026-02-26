@@ -25,3 +25,4 @@ class User(Base):
     ai_secretary = relationship("AiSecretary", back_populates="user", uselist=False, cascade="all, delete-orphan")
     customers = relationship("Customer", back_populates="user", cascade="all, delete-orphan")
     action_items = relationship("ActionItem", back_populates="user", cascade="all, delete-orphan")
+    calendar_events = relationship("CalendarEvent", back_populates="user", cascade="all, delete-orphan")

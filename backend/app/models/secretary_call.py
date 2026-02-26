@@ -34,3 +34,4 @@ class SecretaryCall(Base):
     secretary = relationship("AiSecretary", back_populates="calls")
     customer = relationship("Customer", back_populates="calls")
     action_items = relationship("ActionItem", back_populates="call", cascade="all, delete-orphan")
+    calendar_events = relationship("CalendarEvent", back_populates="call")

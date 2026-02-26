@@ -27,7 +27,7 @@ async def gmail_connect(request: Request, user: User = Depends(get_current_user)
     base = _get_base_url(request)
     redirect_uri = settings.gmail_redirect_uri or f"{base}/api/webhooks/gmail/callback"
 
-    scopes = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send"
+    scopes = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/calendar"
     url = (
         f"https://accounts.google.com/o/oauth2/v2/auth?"
         f"client_id={settings.gmail_client_id}&"
@@ -117,7 +117,7 @@ async def outlook_connect(request: Request, user: User = Depends(get_current_use
     base = _get_base_url(request)
     redirect_uri = settings.outlook_redirect_uri or f"{base}/api/webhooks/outlook/callback"
 
-    scopes = "https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Mail.Send offline_access"
+    scopes = "https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Calendars.ReadWrite offline_access"
     url = (
         f"https://login.microsoftonline.com/{settings.outlook_tenant_id}/oauth2/v2.0/authorize?"
         f"client_id={settings.outlook_client_id}&"
@@ -147,7 +147,7 @@ async def outlook_callback(code: str, state: str, request: Request, db: AsyncSes
                 "code": code,
                 "grant_type": "authorization_code",
                 "redirect_uri": redirect_uri,
-                "scope": "https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Mail.Send offline_access",
+                "scope": "https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Calendars.ReadWrite offline_access",
             },
         )
         if resp.status_code != 200:

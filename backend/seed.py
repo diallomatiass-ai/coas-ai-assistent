@@ -19,6 +19,7 @@ from app.models.secretary_call import SecretaryCall
 from app.models.customer import Customer
 from app.models.action_item import ActionItem
 from app.models.email_reminder import EmailReminder
+from app.models.calendar_event import CalendarEvent
 from app.utils.auth import hash_password
 
 
@@ -28,6 +29,22 @@ async def seed():
 
     async with async_session() as db:
         now = datetime.now(timezone.utc)
+
+        # ─────────────────────────────────────────────
+        # RYD EKSISTERENDE DATA
+        # ─────────────────────────────────────────────
+        from sqlalchemy import text
+        await db.execute(text("""
+            DO $$ DECLARE
+                r RECORD;
+            BEGIN
+                FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+                    EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' RESTART IDENTITY CASCADE';
+                END LOOP;
+            END $$;
+        """))
+        await db.commit()
+        print("Eksisterende data slettet.")
 
         # ─────────────────────────────────────────────
         # BRUGER
@@ -286,6 +303,84 @@ async def seed():
                 deadline=deadline,
             ))
         print(f"Opgaver: {len(action_items_data)} stk")
+
+        # ─────────────────────────────────────────────
+        # KALENDERBEGIVENHEDER (10 stk)
+        # ─────────────────────────────────────────────
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        cal_events = [
+            # I dag
+            CalendarEvent(id=uuid.uuid4(), user_id=user.id, account_id=account.id,
+                title="📞 Ring tilbage: Mette Andersen",
+                description="Bekræft tid til dryppende vandhane — Rosenvej 5, København Ø",
+                start_time=today + timedelta(hours=10),
+                end_time=today + timedelta(hours=10, minutes=30),
+                call_id=call_objs[2].id, event_type="call"),
+            CalendarEvent(id=uuid.uuid4(), user_id=user.id, account_id=account.id,
+                title="📋 Send tilbud: Henrik Sørensen",
+                description="Send tilbud på badeværelsesrenovering × 2 — opmåling aftalt tirsdag",
+                start_time=today + timedelta(hours=14),
+                end_time=today + timedelta(hours=15),
+                event_type="action_item"),
+            CalendarEvent(id=uuid.uuid4(), user_id=user.id, account_id=account.id,
+                title="☕ Morgenmøde — ugeplan",
+                description="Intern gennemgang af ugens opgaver og ressourcer",
+                start_time=today + timedelta(hours=8),
+                end_time=today + timedelta(hours=8, minutes=30),
+                event_type="manual"),
+            # I morgen
+            CalendarEvent(id=uuid.uuid4(), user_id=user.id, account_id=account.id,
+                title="🔧 Opmåling: Henrik Sørensen",
+                description="Besøg til opmåling af to badeværelser — Sørensensgade 12, Aarhus",
+                start_time=today + timedelta(days=1, hours=10),
+                end_time=today + timedelta(days=1, hours=11, minutes=30),
+                event_type="manual"),
+            CalendarEvent(id=uuid.uuid4(), user_id=user.id, account_id=account.id,
+                title="📋 Send tilbud: Fjernvarme Bjørn Pedersen",
+                description="Udarbejd tilbud på fjernvarmetilslutning — 800 m² erhvervsejendom",
+                start_time=today + timedelta(days=1, hours=13),
+                end_time=today + timedelta(days=1, hours=14),
+                event_type="action_item"),
+            # Om 2 dage
+            CalendarEvent(id=uuid.uuid4(), user_id=user.id, account_id=account.id,
+                title="🤝 Møde: Lars Nielsen VVS",
+                description="Entreprisemøde om 24 boliger — Industrivej 88, Odense. Medbring referencer.",
+                start_time=today + timedelta(days=2, hours=9),
+                end_time=today + timedelta(days=2, hours=10, minutes=30),
+                event_type="manual"),
+            # Om 3 dage
+            CalendarEvent(id=uuid.uuid4(), user_id=user.id, account_id=account.id,
+                title="⚡ Kombimøde: Jacob Thorsen El",
+                description="Møde om kombiprojekt el + VVS — Elværksvej 1, Kolding kl. 10:00",
+                start_time=today + timedelta(days=3, hours=10),
+                end_time=today + timedelta(days=3, hours=11),
+                call_id=call_objs[9].id, event_type="call"),
+            # Næste uge
+            CalendarEvent(id=uuid.uuid4(), user_id=user.id, account_id=account.id,
+                title="📋 Følg op: Lars Nielsen VVS-projekt",
+                description="Følg op på stort entrepriseprojekt — 24 boliger. Forbered referencer og prisoversigt.",
+                start_time=today + timedelta(days=7, hours=9),
+                end_time=today + timedelta(days=7, hours=9, minutes=30),
+                event_type="action_item"),
+            CalendarEvent(id=uuid.uuid4(), user_id=user.id, account_id=account.id,
+                title="🏢 Møde: Boligstyring ApS",
+                description="Gennemgang af årskontrakt for 180 lejligheder — pris, responstider og SLA",
+                start_time=today + timedelta(days=8, hours=11),
+                end_time=today + timedelta(days=8, hours=12, minutes=30),
+                event_type="manual"),
+            # Om 10 dage
+            CalendarEvent(id=uuid.uuid4(), user_id=user.id, account_id=account.id,
+                title="📋 Opdater prisliste 2026",
+                description="Opdater prislisten for 2026 på hjemmesiden inden udgangen af måneden.",
+                start_time=today + timedelta(days=10, hours=15),
+                end_time=today + timedelta(days=10, hours=16),
+                event_type="action_item"),
+        ]
+        for ce in cal_events:
+            db.add(ce)
+        await db.flush()
+        print(f"Kalenderbegivenheder: {len(cal_events)} stk")
 
         # ─────────────────────────────────────────────
         # EMAIL PÅMINDELSER (3 stk)

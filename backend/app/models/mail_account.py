@@ -24,3 +24,4 @@ class MailAccount(Base):
 
     user = relationship("User", back_populates="mail_accounts")
     emails = relationship("EmailMessage", back_populates="account", cascade="all, delete-orphan")
+    calendar_events = relationship("CalendarEvent", back_populates="account")

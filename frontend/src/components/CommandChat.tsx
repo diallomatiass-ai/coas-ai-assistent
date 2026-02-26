@@ -23,7 +23,7 @@ export default function CommandChat() {
     {
       id: 0,
       role: 'assistant',
-      content: 'Hej! Skriv hvad du vil gøre med dine emails — f.eks. "Giv mig et overblik", "Slet alle spam-emails" eller "Send et svar til Lars".',
+      content: 'Hej! Hvad kan jeg hjælpe med?\n\n📅 "Hvad har jeg på kalenderen i dag?"\n📋 "Vis mine forfaldne opgaver"\n📞 "Marker opkaldet fra Henrik som løst"\n📊 "Giv mig et dagsoverblik"\n✉️ "Slet alle spam-emails"\n🗓️ "Book møde med Lars fredag kl. 10"',
     },
   ])
   const [loading, setLoading] = useState(false)

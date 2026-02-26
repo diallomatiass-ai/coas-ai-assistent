@@ -26,3 +26,4 @@ class ActionItem(Base):
     user = relationship("User", back_populates="action_items")
     customer = relationship("Customer", back_populates="action_items")
     call = relationship("SecretaryCall", back_populates="action_items")
+    calendar_events = relationship("CalendarEvent", back_populates="action_item")
