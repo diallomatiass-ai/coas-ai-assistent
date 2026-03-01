@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -253,3 +253,111 @@ async def delete_action_item(
 
     await db.delete(item)
     await db.commit()
+
+
+class ActionItemDashboard(BaseModel):
+    total: int
+    pending: int
+    done: int
+    overdue: int
+    due_today: int
+    due_this_week: int
+
+
+@router.get("/dashboard", response_model=ActionItemDashboard)
+async def get_action_items_dashboard(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Dashboard-statistik for action items (bruges af frontend)."""
+    now = datetime.now(timezone.utc)
+    today_end = now.replace(hour=23, minute=59, second=59)
+    week_end = now + timedelta(days=7)
+
+    rows = await db.execute(
+        select(ActionItem).where(ActionItem.user_id == user.id)
+    )
+    items = list(rows.scalars().all())
+
+    total = len(items)
+    pending = sum(1 for i in items if i.status == "pending")
+    done = sum(1 for i in items if i.status == "done")
+    overdue = sum(
+        1 for i in items
+        if i.status == "pending" and i.deadline and i.deadline < now
+    )
+    due_today = sum(
+        1 for i in items
+        if i.status == "pending" and i.deadline and now <= i.deadline <= today_end
+    )
+    due_this_week = sum(
+        1 for i in items
+        if i.status == "pending" and i.deadline and now <= i.deadline <= week_end
+    )
+
+    return ActionItemDashboard(
+        total=total,
+        pending=pending,
+        done=done,
+        overdue=overdue,
+        due_today=due_today,
+        due_this_week=due_this_week,
+    )
+
+
+class FollowupDraftResponse(BaseModel):
+    draft: str
+    subject: str
+
+
+@router.post("/{item_id}/generate-draft", response_model=FollowupDraftResponse)
+async def generate_followup_draft(
+    item_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generer et opfølgnings-emailudkast for et action item via Claude API."""
+    result = await db.execute(
+        select(ActionItem).where(ActionItem.id == item_id, ActionItem.user_id == user.id)
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Action item ikke fundet")
+
+    from app.services.ai_engine import _call_claude_async
+
+    action_labels = {
+        "ring_tilbage": "ring tilbage til",
+        "send_tilbud": "sende et tilbud til",
+        "følg_op": "følge op på",
+        "send_faktura": "sende en faktura til",
+        "book_møde": "booke et møde med",
+    }
+    action_text = action_labels.get(item.action, item.action)
+    description = item.description or ""
+    deadline_text = ""
+    if item.deadline:
+        deadline_text = f" Deadline: {item.deadline.strftime('%d/%m/%Y')}."
+
+    prompt = (
+        f"Du er en professionel dansk assistent. Skriv et kort, venligt og professionelt "
+        f"opfølgnings-email-udkast. Handlingen er at {action_text} kunden.{deadline_text} "
+        f"Kontekst: {description}\n\n"
+        f"Returnér KUN emailteksten — ingen forklaring, ingen overskrift. Brug dansk."
+    )
+
+    try:
+        draft = await _call_claude_async(prompt, max_tokens=300)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"AI-generering fejlede: {exc}") from exc
+
+    action_subject_labels = {
+        "ring_tilbage": "Opfølgning — ring tilbage",
+        "send_tilbud": "Tilbud",
+        "følg_op": "Opfølgning",
+        "send_faktura": "Faktura",
+        "book_møde": "Mødeforespørgsel",
+    }
+    subject = action_subject_labels.get(item.action, "Opfølgning")
+
+    return FollowupDraftResponse(draft=draft.strip(), subject=subject)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING
@@ -22,20 +23,18 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Anthropic klient (sync — bruges via asyncio.to_thread)
-_anthropic_client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+# Async Anthropic klient — direkte async, ingen asyncio.to_thread wrapper nødvendig
+_anthropic_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+
+# Retry-konfiguration
+_MAX_RETRIES = 3
+_RETRY_BASE_DELAY = 1.0  # sekunder
 
 
 async def get_embedding(text: str) -> list[float]:
     """Get an embedding vector from the Ollama nomic-embed-text model.
 
     Anthropic har ikke et embedding-API — Ollama bruges stadig til embeddings.
-
-    Args:
-        text: The text to embed.
-
-    Returns:
-        A list of floats representing the embedding vector.
     """
     url = f"{settings.ollama_base_url}/api/embeddings"
     payload = {
@@ -54,51 +53,59 @@ async def get_embedding(text: str) -> list[float]:
         return []
 
 
-def _call_claude(prompt: str, model: str | None = None, max_tokens: int = 1024) -> str:
-    """Kald Claude API synkront og returnér svartekst.
+async def _call_claude_async(
+    prompt: str, model: str | None = None, max_tokens: int = 1024
+) -> str:
+    """Kald Claude API asynkront med exponential backoff retry.
 
-    Args:
-        prompt: Prompten der sendes til Claude.
-        model: Model-ID — defaults til settings.claude_model.
-        max_tokens: Maks antal output-tokens.
-
-    Returns:
-        Genereret tekst fra Claude.
+    Håndterer automatisk:
+      - 429 RateLimitError  → venter og prøver igen
+      - 503 APIStatusError  → venter og prøver igen
+      - Andre APIError      → kaster videre efter max retries
     """
     chosen_model = model or settings.claude_model
-    message = _anthropic_client.messages.create(
-        model=chosen_model,
-        max_tokens=max_tokens,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return message.content[0].text
+    last_exc: Exception | None = None
 
+    for attempt in range(_MAX_RETRIES):
+        try:
+            message = await _anthropic_client.messages.create(
+                model=chosen_model,
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return message.content[0].text
 
-async def _call_claude_async(prompt: str, model: str | None = None, max_tokens: int = 1024) -> str:
-    """Asynkron wrapper til _call_claude via asyncio.to_thread.
+        except anthropic.RateLimitError as exc:
+            last_exc = exc
+            delay = _RETRY_BASE_DELAY * (2 ** attempt)
+            logger.warning(
+                "Claude API 429 rate limit (forsøg %d/%d) — venter %.1fs",
+                attempt + 1, _MAX_RETRIES, delay,
+            )
+            await asyncio.sleep(delay)
 
-    Args:
-        prompt: Prompten der sendes til Claude.
-        model: Model-ID.
-        max_tokens: Maks antal output-tokens.
+        except anthropic.APIStatusError as exc:
+            if exc.status_code >= 500:
+                last_exc = exc
+                delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                logger.warning(
+                    "Claude API %d server fejl (forsøg %d/%d) — venter %.1fs",
+                    exc.status_code, attempt + 1, _MAX_RETRIES, delay,
+                )
+                await asyncio.sleep(delay)
+            else:
+                raise
 
-    Returns:
-        Genereret tekst fra Claude.
-    """
-    import asyncio
-    return await asyncio.to_thread(_call_claude, prompt, model, max_tokens)
+        except anthropic.APIError:
+            raise
+
+    raise RuntimeError(
+        f"Claude API fejlede efter {_MAX_RETRIES} forsøg: {last_exc}"
+    ) from last_exc
 
 
 async def classify_email(subject: str, body: str) -> dict:
-    """Klassificér en email med Claude Haiku (hurtig + billig).
-
-    Args:
-        subject: Email-emnelinjen.
-        body: Email-brødteksten.
-
-    Returns:
-        Dict med category, urgency, topic, confidence.
-    """
+    """Klassificér en email med Claude Haiku (hurtig + billig)."""
     prompt = build_classification_prompt(subject, body)
 
     try:
@@ -107,7 +114,7 @@ async def classify_email(subject: str, body: str) -> dict:
             model=settings.claude_fast_model,
             max_tokens=256,
         )
-    except anthropic.APIError as exc:
+    except Exception as exc:
         logger.error("Claude API fejl under klassificering: %s", exc)
         return _default_classification()
 
@@ -115,17 +122,9 @@ async def classify_email(subject: str, body: str) -> dict:
 
 
 def _parse_classification_response(raw: str) -> dict:
-    """Parse LLM klassificerings-svar som JSON.
-
-    Args:
-        raw: Råtekst fra LLM.
-
-    Returns:
-        Parsed klassificerings-dict, eller defaults ved fejl.
-    """
+    """Parse LLM klassificerings-svar som JSON."""
     text = raw.strip()
 
-    # Fjern markdown code fences hvis til stede
     if text.startswith("```"):
         lines = text.split("\n")
         lines = [line for line in lines if not line.strip().startswith("```")]
@@ -146,8 +145,10 @@ def _parse_classification_response(raw: str) -> dict:
             logger.warning("Intet JSON-objekt fundet i klassificerings-svar: %s", text[:200])
             return _default_classification()
 
-    valid_categories = {"tilbud", "booking", "reklamation", "faktura", "leverandor", "intern", "spam", "andet",
-                        "inquiry", "complaint", "order", "support", "other"}
+    valid_categories = {
+        "tilbud", "booking", "reklamation", "faktura", "leverandor", "intern", "spam", "andet",
+        "inquiry", "complaint", "order", "support", "other",
+    }
     valid_urgencies = {"high", "medium", "low"}
 
     category = str(data.get("category", "andet")).lower()
@@ -175,7 +176,6 @@ def _parse_classification_response(raw: str) -> dict:
 
 
 def _default_classification() -> dict:
-    """Returnér sikre standard klassificeringsværdier."""
     return {
         "category": "andet",
         "urgency": "medium",
@@ -187,23 +187,7 @@ def _default_classification() -> dict:
 async def generate_reply(
     email: EmailMessage, user: User, db: AsyncSession
 ) -> str:
-    """Orkestrér fuld svargenererings-pipeline med Claude Sonnet.
-
-    Trin:
-      1. Søg ChromaDB efter relevante videnbase-poster.
-      2. Søg ChromaDB efter lignende tidligere godkendte svar.
-      3. Hent matchende skabeloner fra databasen.
-      4. Byg reply-prompt med al kontekst.
-      5. Kald Claude Sonnet for at generere svaret.
-
-    Args:
-        email: EmailMessage der skal besvares.
-        user: Ejeren af mailkontoen.
-        db: Async database session.
-
-    Returns:
-        Genereret svartekst.
-    """
+    """Orkestrér fuld svargenererings-pipeline med Claude Sonnet."""
     user_id_str = str(user.id)
     query_text = f"{email.subject or ''} {email.body_text or ''}"
 
@@ -248,9 +232,9 @@ async def generate_reply(
         reply_text = await _call_claude_async(
             prompt,
             model=settings.claude_model,
-            max_tokens=512,
+            max_tokens=768,
         )
-    except anthropic.APIError as exc:
+    except Exception as exc:
         logger.error("Claude API fejl under svargenerering: %s", exc)
         raise RuntimeError(f"Kunne ikke generere svar: {exc}") from exc
 

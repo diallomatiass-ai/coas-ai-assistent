@@ -34,8 +34,9 @@ limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 
 
 async def ensure_columns(engine):
-    """Tilføj manglende kolonner til eksisterende tabeller."""
+    """Tilføj manglende kolonner og indexes til eksisterende tabeller."""
     stmts = [
+        # Kolonner
         "ALTER TABLE email_messages ADD COLUMN IF NOT EXISTS customer_id UUID REFERENCES customers(id)",
         "ALTER TABLE email_messages ADD COLUMN IF NOT EXISTS is_outgoing BOOLEAN DEFAULT false",
         "ALTER TABLE secretary_calls ADD COLUMN IF NOT EXISTS customer_id UUID REFERENCES customers(id)",
@@ -44,6 +45,14 @@ async def ensure_columns(engine):
         "ALTER TABLE ai_secretaries ADD COLUMN IF NOT EXISTS confirmation_template TEXT",
         "ALTER TABLE ai_secretaries ADD COLUMN IF NOT EXISTS response_deadline_hours INTEGER DEFAULT 24",
         "ALTER TABLE ai_secretaries ADD COLUMN IF NOT EXISTS booking_rules JSONB",
+        # Performance indexes
+        "CREATE INDEX IF NOT EXISTS idx_email_user_received ON email_messages (account_id, received_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_email_category ON email_messages (account_id, category)",
+        "CREATE INDEX IF NOT EXISTS idx_email_is_read ON email_messages (account_id, is_read)",
+        "CREATE INDEX IF NOT EXISTS idx_action_items_user_status ON action_items (user_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_action_items_deadline ON action_items (user_id, deadline)",
+        "CREATE INDEX IF NOT EXISTS idx_suggestions_email ON ai_suggestions (email_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_mail_accounts_user ON mail_accounts (user_id, is_active)",
     ]
     async with engine.begin() as conn:
         for stmt in stmts:
