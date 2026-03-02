@@ -44,3 +44,6 @@ websockets==13.1
 
 # Stripe (betaling + abonnementer)
 stripe==11.3.0
+
+# OpenAI (kun til Whisper tale→tekst transskription)
+openai==1.54.0

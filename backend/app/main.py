@@ -31,6 +31,7 @@ from app.api.admin import router as admin_router
 from app.api.sms import router as sms_router
 from app.api.ws import router as ws_router
 from app.api.billing import router as billing_router
+from app.api.secretary_transcribe import router as transcribe_router
 import app.models  # noqa: F401 — ensure all models are registered
 
 # Rate limiter — 10 forespørgsler pr. minut pr. IP på chat + emails
@@ -64,6 +65,9 @@ async def ensure_columns(engine):
         "CREATE INDEX IF NOT EXISTS idx_action_items_deadline ON action_items (user_id, deadline)",
         "CREATE INDEX IF NOT EXISTS idx_suggestions_email ON ai_suggestions (email_id, status)",
         "CREATE INDEX IF NOT EXISTS idx_mail_accounts_user ON mail_accounts (user_id, is_active)",
+        # Fulltekst-søgning: GIN index på subject + body_text
+        """CREATE INDEX IF NOT EXISTS idx_email_fulltext ON email_messages
+           USING gin(to_tsvector('danish', coalesce(subject,'') || ' ' || coalesce(body_text,'')))""",
     ]
     async with engine.begin() as conn:
         for stmt in stmts:
@@ -128,6 +132,7 @@ app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
 app.include_router(sms_router, prefix="/api/sms", tags=["sms"])
 app.include_router(ws_router, prefix="/api", tags=["websocket"])
 app.include_router(billing_router, prefix="/api/billing", tags=["billing"])
+app.include_router(transcribe_router, prefix="/api/secretary", tags=["secretary-transcribe"])
 
 
 @app.get("/api/health")

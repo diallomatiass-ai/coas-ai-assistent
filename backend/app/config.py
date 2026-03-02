@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     twilio_auth_token: str = ""
     twilio_phone_number: str = ""
 
+    # OpenAI Whisper (tale → tekst transskription)
+    openai_api_key: str = ""
+    whisper_model: str = "whisper-1"
+
     # Stripe (abonnementer + betaling)
     stripe_secret_key: str = ""
     stripe_publishable_key: str = ""

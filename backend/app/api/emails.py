@@ -69,6 +69,7 @@ async def list_emails(
                 EmailMessage.from_address.ilike(term),
                 EmailMessage.from_name.ilike(term),
                 EmailMessage.subject.ilike(term),
+                EmailMessage.body_text.ilike(term),
             )
         )
     query_with_sug = query_with_sug.offset(skip).limit(limit)
@@ -508,12 +509,38 @@ async def dashboard_summary(
     )
     top_emails = top_result.scalars().all()
 
+    # Onboarding-checklist: tjek hvad brugeren har sat op
+    from app.models.knowledge_base import KnowledgeBase
+    from app.models.ai_secretary import AiSecretary
+
+    has_mail_account = len(account_ids) > 0
+    has_knowledge = bool((await db.execute(
+        select(func.count()).where(KnowledgeBase.user_id == user.id)
+    )).scalar())
+    has_secretary = bool((await db.execute(
+        select(func.count()).where(AiSecretary.user_id == user.id)
+    )).scalar())
+    has_emails = week_total > 0
+    has_subscription = user.plan != "free" if hasattr(user, "plan") else False
+
+    onboarding = {
+        "completed": all([has_mail_account, has_knowledge, has_emails]),
+        "steps": [
+            {"id": "mail_account", "label": "Forbind mailkonto", "done": has_mail_account},
+            {"id": "knowledge",    "label": "Tilføj videnbase",  "done": has_knowledge},
+            {"id": "first_email",  "label": "Første email modtaget", "done": has_emails},
+            {"id": "secretary",    "label": "Aktiver AI Sekretær", "done": has_secretary},
+            {"id": "subscription", "label": "Opgrader abonnement", "done": has_subscription},
+        ],
+    }
+
     return {
         "user_name": user.name,
         "unread": unread,
         "high_priority": high_priority,
         "pending_suggestions": pending_sug,
         "week_total": week_total,
+        "onboarding": onboarding,
         "top_urgent": [
             {
                 "id": str(e.id),

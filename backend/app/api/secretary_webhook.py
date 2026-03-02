@@ -198,6 +198,26 @@ async def create_secretary_call(
     await db.commit()
     await db.refresh(call)
 
+    # Auto-send SMS-bekræftelse hvis aktiveret og telefonnummer findes
+    if secretary.confirmation_enabled and data.caller_phone:
+        try:
+            from app.services.sms_service import send_booking_confirmation
+            import asyncio
+            short_summary = (data.summary or "")[:80]
+            asyncio.get_event_loop().run_until_complete(
+                asyncio.to_thread(
+                    send_booking_confirmation,
+                    data.caller_phone,
+                    data.caller_name or "",
+                    secretary.business_name,
+                    short_summary,
+                )
+            )
+            call.confirmation_sent_at = datetime.now(timezone.utc)
+            await db.commit()
+        except Exception as exc:
+            logger.warning("Auto-SMS bekræftelse fejlede: %s", exc)
+
     # Trigger bekræftelsesmail (asynkront)
     try:
         from app.tasks.worker import send_call_confirmation_task
