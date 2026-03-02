@@ -30,6 +30,7 @@ from app.api.booking_rules import router as booking_rules_router
 from app.api.admin import router as admin_router
 from app.api.sms import router as sms_router
 from app.api.ws import router as ws_router
+from app.api.billing import router as billing_router
 import app.models  # noqa: F401 — ensure all models are registered
 
 # Rate limiter — 10 forespørgsler pr. minut pr. IP på chat + emails
@@ -48,6 +49,13 @@ async def ensure_columns(engine):
         "ALTER TABLE ai_secretaries ADD COLUMN IF NOT EXISTS confirmation_template TEXT",
         "ALTER TABLE ai_secretaries ADD COLUMN IF NOT EXISTS response_deadline_hours INTEGER DEFAULT 24",
         "ALTER TABLE ai_secretaries ADD COLUMN IF NOT EXISTS booking_rules JSONB",
+        # Stripe kolonner på users
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255) UNIQUE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(255) UNIQUE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(50) DEFAULT 'free'",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(50) DEFAULT 'free'",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_ends_at TIMESTAMPTZ",
         # Performance indexes
         "CREATE INDEX IF NOT EXISTS idx_email_user_received ON email_messages (account_id, received_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_email_category ON email_messages (account_id, category)",
@@ -119,6 +127,7 @@ app.include_router(booking_rules_router, prefix="/api/booking-rules", tags=["boo
 app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
 app.include_router(sms_router, prefix="/api/sms", tags=["sms"])
 app.include_router(ws_router, prefix="/api", tags=["websocket"])
+app.include_router(billing_router, prefix="/api/billing", tags=["billing"])
 
 
 @app.get("/api/health")

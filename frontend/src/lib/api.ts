@@ -305,4 +305,12 @@ export const api = {
     const params = new URLSearchParams({ from, to })
     return fetchApi(`/booking-rules/availability?${params}`)
   },
+
+  // Billing / Stripe
+  getBillingPlans: () => fetchApi('/billing/plans'),
+  getSubscription: () => fetchApi('/billing/subscription'),
+  createCheckout: (plan: string) =>
+    fetchApi('/billing/checkout', { method: 'POST', body: JSON.stringify({ plan }) }),
+  createPortal: () =>
+    fetchApi('/billing/portal', { method: 'POST' }),
 };

@@ -66,6 +66,16 @@ class Settings(BaseSettings):
     twilio_auth_token: str = ""
     twilio_phone_number: str = ""
 
+    # Stripe (abonnementer + betaling)
+    stripe_secret_key: str = ""
+    stripe_publishable_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_starter: str = ""   # Price ID fra Stripe Dashboard
+    stripe_price_pro: str = ""
+    stripe_price_business: str = ""
+    stripe_success_url: str = "http://localhost/billing?success=true"
+    stripe_cancel_url: str = "http://localhost/billing?canceled=true"
+
     @field_validator("secret_key")
     @classmethod
     def warn_weak_secret(cls, v):

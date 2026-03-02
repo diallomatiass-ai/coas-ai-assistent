@@ -41,3 +41,6 @@ twilio==9.5.1
 
 # WebSocket
 websockets==13.1
+
+# Stripe (betaling + abonnementer)
+stripe==11.3.0

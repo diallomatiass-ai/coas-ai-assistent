@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
-import { Inbox, LayoutDashboard, FileText, BookOpen, Settings, Sun, Moon, Phone, Users, Calendar, ShieldCheck } from 'lucide-react'
+import { Inbox, LayoutDashboard, FileText, BookOpen, Settings, Sun, Moon, Phone, Users, Calendar, ShieldCheck, CreditCard } from 'lucide-react'
 import { useTranslation } from '@/lib/i18n'
 import { api } from '@/lib/api'
 
@@ -63,6 +63,7 @@ export default function Sidebar() {
     { href: '/templates', label: t('templates'), icon: FileText, badge: 0 },
     { href: '/knowledge', label: t('knowledgeBase'), icon: BookOpen, badge: 0 },
     { href: '/settings', label: t('settings'), icon: Settings, badge: 0 },
+    { href: '/billing', label: 'Abonnement', icon: CreditCard, badge: 0 },
     ...(currentUser?.role === 'admin'
       ? [{ href: '/admin', label: 'Admin', icon: ShieldCheck, badge: 0 }]
       : []),

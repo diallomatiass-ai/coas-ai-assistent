@@ -19,6 +19,14 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(50), default="user")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    # Stripe abonnement
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(255), unique=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(255), unique=True)
+    plan: Mapped[str] = mapped_column(String(50), default="free")             # free | starter | pro | business
+    subscription_status: Mapped[str] = mapped_column(String(50), default="free")  # free | trialing | active | past_due | canceled
+    trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    subscription_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     mail_accounts = relationship("MailAccount", back_populates="user", cascade="all, delete-orphan")
     templates = relationship("Template", back_populates="user", cascade="all, delete-orphan")
     knowledge_entries = relationship("KnowledgeBase", back_populates="user", cascade="all, delete-orphan")
