@@ -98,6 +98,16 @@ async def sync_account(account: MailAccount, db: AsyncSession) -> int:
                 if saved_email:
                     process_single_email.delay(str(saved_email.id))
 
+        # Notificér frontend via WebSocket (best-effort)
+        try:
+            from app.api.ws import publish_ws_event
+            publish_ws_event(
+                str(account.user_id),
+                {"type": "new_email", "count": new_count, "account": account.email_address},
+            )
+        except Exception:
+            pass
+
     logger.info(
         "Synced %s — %d new / %d fetched / %d duplicates skipped",
         account.email_address,

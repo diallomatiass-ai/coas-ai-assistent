@@ -1,3 +1,4 @@
+import asyncio
 import os
 from contextlib import asynccontextmanager
 
@@ -27,6 +28,8 @@ from app.api.calendar import router as calendar_router
 from app.api.calendar_webhooks import router as calendar_webhooks_router
 from app.api.booking_rules import router as booking_rules_router
 from app.api.admin import router as admin_router
+from app.api.sms import router as sms_router
+from app.api.ws import router as ws_router
 import app.models  # noqa: F401 — ensure all models are registered
 
 # Rate limiter — 10 forespørgsler pr. minut pr. IP på chat + emails
@@ -65,7 +68,18 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     await ensure_columns(engine)
+
+    # Start WebSocket Redis listener som baggrundstask
+    from app.api.ws import redis_listener
+    ws_task = asyncio.create_task(redis_listener())
+
     yield
+
+    ws_task.cancel()
+    try:
+        await ws_task
+    except asyncio.CancelledError:
+        pass
     await engine.dispose()
 
 
@@ -103,6 +117,8 @@ app.include_router(calendar_router, prefix="/api/calendar", tags=["calendar"])
 app.include_router(calendar_webhooks_router, prefix="/api/calendar/oauth", tags=["calendar-oauth"])
 app.include_router(booking_rules_router, prefix="/api/booking-rules", tags=["booking-rules"])
 app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
+app.include_router(sms_router, prefix="/api/sms", tags=["sms"])
+app.include_router(ws_router, prefix="/api", tags=["websocket"])
 
 
 @app.get("/api/health")

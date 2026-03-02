@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { api } from '@/lib/api'
+import { useWebSocket } from '@/hooks/useWebSocket'
 import InboxList from '@/components/InboxList'
 import EmailDetail from '@/components/EmailDetail'
 import AiSuggestionCard from '@/components/AiSuggestionCard'
@@ -93,6 +94,13 @@ export default function InboxPage() {
   }, [activeCategory, activeUrgency, debouncedSearch, view])
 
   useEffect(() => { fetchReminders() }, [])
+
+  // WebSocket: auto-refresh indbakken når ny email modtages
+  useWebSocket((event) => {
+    if (event.type === 'new_email' && view === 'inbox') {
+      fetchEmails()
+    }
+  })
 
   const fetchDetail = useCallback(async (id: string) => {
     setDetailLoading(true)
